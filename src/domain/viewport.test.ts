@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centerViewportOffset, panViewportOffset, viewportPointToWorld, zoomViewportAtPoint } from "./viewport";
+import { centerViewportOffset, expandWorldSizeToCoverViewport, panViewportOffset, viewportPointToWorld, zoomViewportAtPoint } from "./viewport";
 
 describe("viewportPointToWorld", () => {
   it("maps a visible pointer position into the panned drawing world", () => {
@@ -65,6 +65,36 @@ describe("centerViewportOffset", () => {
     expect(centerViewportOffset({ width: 2000, height: 1400 }, { width: 500, height: 300 })).toEqual({
       x: 750,
       y: 550,
+    });
+  });
+});
+
+describe("expandWorldSizeToCoverViewport", () => {
+  it("expands the drawing world when zooming out exposes coordinates beyond the current world", () => {
+    expect(
+      expandWorldSizeToCoverViewport(
+        { width: 3200, height: 2200 },
+        { x: 0, y: 0 },
+        { width: 1900, height: 1000 },
+        0.5,
+      ),
+    ).toEqual({
+      width: 3800,
+      height: 2200,
+    });
+  });
+
+  it("keeps the current drawing world when the viewport is already inside it", () => {
+    expect(
+      expandWorldSizeToCoverViewport(
+        { width: 3200, height: 2200 },
+        { x: 600, y: 400 },
+        { width: 900, height: 600 },
+        1,
+      ),
+    ).toEqual({
+      width: 3200,
+      height: 2200,
     });
   });
 });

@@ -55,6 +55,15 @@ export const centerViewportOffset = (worldSize: Size, viewportSize: Size, viewpo
     viewportZoom,
   );
 
+export const expandWorldSizeToCoverViewport = (worldSize: Size, viewportOffset: Point, viewportSize: Size, viewportZoom = 1): Size => {
+  const visibleSize = visibleWorldSize(viewportSize, viewportZoom);
+
+  return {
+    width: Math.max(worldSize.width, Math.ceil(viewportOffset.x + visibleSize.width)),
+    height: Math.max(worldSize.height, Math.ceil(viewportOffset.y + visibleSize.height)),
+  };
+};
+
 export const zoomViewportAtPoint = (
   state: ViewportState,
   nextZoom: number,

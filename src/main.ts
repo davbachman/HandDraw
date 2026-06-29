@@ -9,7 +9,7 @@ import { releaseTool, selectTouchedTool, startSelectedTool } from "./domain/tool
 import { advanceActiveTool, type ActiveTool, type ToolStrokeSegment } from "./domain/tools";
 import { areHandsEdgeOnForZoom, beginTwoHandZoom, calculatePointDistance, getMidpoint, getTwoHandZoom, type TwoHandZoomState } from "./domain/twoHandZoom";
 import type { Point, PointerState, Rect, Size, ToolKind } from "./domain/types";
-import { centerViewportOffset, clampViewportOffset, panViewportOffset, zoomViewportAtPoint } from "./domain/viewport";
+import { centerViewportOffset, clampViewportOffset, expandWorldSizeToCoverViewport, panViewportOffset, zoomViewportAtPoint } from "./domain/viewport";
 import { HandTracker, requestCameraStream } from "./tracking";
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
@@ -29,7 +29,7 @@ const paletteItems: Array<{ kind: ToolKind; label: string }> = [
 ];
 
 const trackingGraceMs = 650;
-const worldSize: Size = { width: 3200, height: 2200 };
+let worldSize: Size = { width: 3200, height: 2200 };
 
 let tracker: HandTracker | null = null;
 let cameraStream: MediaStream | null = null;
@@ -412,6 +412,7 @@ function drawWithActiveTool(): void {
     return;
   }
 
+  ensureWorldCoversViewport();
   const result = advanceActiveTool(activeTool, { x: pointer.x, y: pointer.y }, getCanvasRect(), viewportOffset, viewportZoom);
   activeTool = result.activeTool;
 
@@ -575,15 +576,19 @@ function resizeDrawingCanvas(): void {
   renderWorldViewport();
 }
 
-function resizeWorldCanvas(nextScale = window.devicePixelRatio || 1): void {
-  const width = Math.max(1, Math.round(worldSize.width * nextScale));
-  const height = Math.max(1, Math.round(worldSize.height * nextScale));
+function resizeWorldCanvas(nextScale = window.devicePixelRatio || 1, nextWorldSize = worldSize): void {
+  const width = Math.max(1, Math.round(nextWorldSize.width * nextScale));
+  const height = Math.max(1, Math.round(nextWorldSize.height * nextScale));
 
   if (worldCanvas.width === width && worldCanvas.height === height) {
     worldScale = nextScale;
+    worldSize = nextWorldSize;
     return;
   }
 
+  const previousScale = worldScale || nextScale;
+  const previousLogicalWidth = worldCanvas.width / previousScale;
+  const previousLogicalHeight = worldCanvas.height / previousScale;
   const snapshot = document.createElement("canvas");
   snapshot.width = worldCanvas.width;
   snapshot.height = worldCanvas.height;
@@ -593,10 +598,23 @@ function resizeWorldCanvas(nextScale = window.devicePixelRatio || 1): void {
   worldCanvas.height = height;
 
   if (snapshot.width > 0 && snapshot.height > 0) {
-    worldCanvas.getContext("2d")?.drawImage(snapshot, 0, 0, width, height);
+    worldCanvas
+      .getContext("2d")
+      ?.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, Math.round(previousLogicalWidth * nextScale), Math.round(previousLogicalHeight * nextScale));
   }
 
   worldScale = nextScale;
+  worldSize = nextWorldSize;
+}
+
+function ensureWorldCoversViewport(): void {
+  const viewportSize = getCanvasSize();
+  const nextWorldSize = expandWorldSizeToCoverViewport(worldSize, viewportOffset, viewportSize, viewportZoom);
+
+  if (nextWorldSize.width !== worldSize.width || nextWorldSize.height !== worldSize.height) {
+    resizeWorldCanvas(window.devicePixelRatio || 1, nextWorldSize);
+    viewportOffset = clampViewportOffset(viewportOffset, viewportSize, worldSize, viewportZoom);
+  }
 }
 
 function renderWorldViewport(): void {
@@ -605,6 +623,7 @@ function renderWorldViewport(): void {
     return;
   }
 
+  ensureWorldCoversViewport();
   const rect = drawingCanvas.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
   const sourceWidth = rect.width / viewportZoom;
