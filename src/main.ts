@@ -1,6 +1,7 @@
 import "./styles.css";
 import { HandLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { shouldHandlePointerFallback, shouldTrackPointerFallback } from "./dom/pointerFallback";
+import { getCameraPreviewToggleState } from "./domain/cameraPreview";
 import { mapLandmarkToViewport, pointInRect } from "./domain/geometry";
 import { calculateFingerExtensionRatio, calculatePinchRatio, nextFistState, nextPinchState } from "./domain/gesture";
 import { cameraInputOverscanRatio, viewportZoomRange, zoomDeadband } from "./domain/interactionSettings";
@@ -42,6 +43,7 @@ let animationFrame = 0;
 let lostTrackingAt: number | null = null;
 let statusMessage = "Use the mouse fallback now, or start the camera when ready. Closed fist over the canvas pans.";
 let cameraStatus: "idle" | "loading" | "active" | "error" = "idle";
+let cameraPreviewVisible = true;
 let lastPinchRatio: number | null = null;
 let lastFingerExtensionRatio: number | null = null;
 let hasCanvasMarks = false;
@@ -80,8 +82,8 @@ app.innerHTML = `
         <span class="canvas-empty" data-empty-label>Select a pencil or eraser, then pinch the canvas to draw or erase.</span>
       </div>
     </section>
-    <footer class="footer" aria-label="Camera diagnostics">
-      <div class="camera-preview">
+    <footer class="footer" aria-label="Camera diagnostics" data-footer>
+      <div class="camera-preview" data-camera-preview>
         <video data-video playsinline muted></video>
         <canvas data-debug-canvas></canvas>
       </div>
@@ -94,6 +96,12 @@ app.innerHTML = `
         <div class="message" data-message>${statusMessage}</div>
       </div>
       <div class="controls">
+        <button class="preview-toggle" type="button" role="switch" aria-checked="true" data-preview-toggle data-pointer-fallback="ignore">
+          <span data-preview-toggle-label>Preview on</span>
+          <span class="preview-toggle__track" aria-hidden="true">
+            <span class="preview-toggle__thumb"></span>
+          </span>
+        </button>
         <button class="camera-button" type="button" data-camera-button data-pointer-fallback="ignore">Start Camera</button>
         <p class="hint">Mouse fallback: click a tool, then press-drag on the canvas.</p>
       </div>
@@ -113,6 +121,8 @@ const requiredElement = <ElementType extends Element>(selector: string): Element
 };
 
 const root = requiredElement<HTMLElement>(".app");
+const footer = requiredElement<HTMLElement>("[data-footer]");
+const cameraPreview = requiredElement<HTMLElement>("[data-camera-preview]");
 const video = requiredElement<HTMLVideoElement>("[data-video]");
 const debugCanvas = requiredElement<HTMLCanvasElement>("[data-debug-canvas]");
 const canvas = requiredElement<HTMLElement>("[data-canvas]");
@@ -123,11 +133,18 @@ const cameraButton = requiredElement<HTMLButtonElement>("[data-camera-button]");
 const cameraPill = requiredElement<HTMLElement>("[data-camera-pill]");
 const trackingPill = requiredElement<HTMLElement>("[data-tracking-pill]");
 const toolPill = requiredElement<HTMLElement>("[data-tool-pill]");
+const previewToggle = requiredElement<HTMLButtonElement>("[data-preview-toggle]");
+const previewToggleLabel = requiredElement<HTMLElement>("[data-preview-toggle-label]");
 const message = requiredElement<HTMLElement>("[data-message]");
 const emptyLabel = requiredElement<HTMLElement>("[data-empty-label]");
 
 cameraButton.addEventListener("click", () => {
   void startCamera();
+});
+
+previewToggle.addEventListener("click", () => {
+  cameraPreviewVisible = !cameraPreviewVisible;
+  renderCameraPreviewToggle();
 });
 
 root.addEventListener("pointermove", (event) => {
@@ -653,6 +670,7 @@ function render(): void {
   renderToolPreview();
   renderCursor();
   renderStatus();
+  renderCameraPreviewToggle();
   emptyLabel.style.display = hasCanvasMarks ? "none" : "block";
 }
 
@@ -713,6 +731,15 @@ function renderStatus(): void {
   toolPill.className = `pill ${twoHandZoomState ? "pill--warn" : panState || wasFist || activeTool ? "pill--hot" : selectedTool ? "pill--ok" : ""}`;
 
   message.textContent = statusMessage;
+}
+
+function renderCameraPreviewToggle(): void {
+  const state = getCameraPreviewToggleState(cameraPreviewVisible);
+  cameraPreview.hidden = state.previewHidden;
+  footer.classList.toggle("footer--preview-hidden", state.previewHidden);
+  previewToggle.className = state.buttonClassName;
+  previewToggle.setAttribute("aria-checked", state.ariaChecked);
+  previewToggleLabel.textContent = state.label;
 }
 
 function toolLabel(kind: ToolKind): string {
