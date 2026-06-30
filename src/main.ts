@@ -1,7 +1,7 @@
 import "./styles.css";
 import { HandLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { shouldHandlePointerFallback, shouldTrackPointerFallback } from "./dom/pointerFallback";
-import { getCameraPreviewToggleState } from "./domain/cameraPreview";
+import { defaultCameraPreviewVisible, getCameraPreviewToggleState } from "./domain/cameraPreview";
 import { mapLandmarkToViewport, pointInRect } from "./domain/geometry";
 import { calculateFingerExtensionRatio, calculatePinchRatio, nextFistState, nextPinchState } from "./domain/gesture";
 import { cameraInputOverscanRatio, viewportZoomRange, zoomDeadband } from "./domain/interactionSettings";
@@ -43,7 +43,7 @@ let animationFrame = 0;
 let lostTrackingAt: number | null = null;
 let statusMessage = "Use the mouse fallback now, or start the camera when ready. Closed fist over the canvas pans.";
 let cameraStatus: "idle" | "loading" | "active" | "error" = "idle";
-let cameraPreviewVisible = true;
+let cameraPreviewVisible = defaultCameraPreviewVisible;
 let lastPinchRatio: number | null = null;
 let lastFingerExtensionRatio: number | null = null;
 let hasCanvasMarks = false;
@@ -82,8 +82,8 @@ app.innerHTML = `
         <span class="canvas-empty" data-empty-label>Select a pencil or eraser, then pinch the canvas to draw or erase.</span>
       </div>
     </section>
-    <footer class="footer" aria-label="Camera diagnostics" data-footer>
-      <div class="camera-preview" data-camera-preview>
+    <footer class="footer footer--preview-hidden" aria-label="Camera diagnostics" data-footer>
+      <div class="camera-preview" data-camera-preview hidden>
         <video data-video playsinline muted></video>
         <canvas data-debug-canvas></canvas>
       </div>
@@ -96,8 +96,8 @@ app.innerHTML = `
         <div class="message" data-message>${statusMessage}</div>
       </div>
       <div class="controls">
-        <button class="preview-toggle" type="button" role="switch" aria-checked="true" data-preview-toggle data-pointer-fallback="ignore">
-          <span data-preview-toggle-label>Preview on</span>
+        <button class="preview-toggle is-off" type="button" role="switch" aria-checked="false" data-preview-toggle data-pointer-fallback="ignore">
+          <span data-preview-toggle-label>Preview off</span>
           <span class="preview-toggle__track" aria-hidden="true">
             <span class="preview-toggle__thumb"></span>
           </span>

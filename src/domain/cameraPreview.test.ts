@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { getCameraPreviewToggleState } from "./cameraPreview";
+import { defaultCameraPreviewVisible, getCameraPreviewToggleState } from "./cameraPreview";
 
 describe("getCameraPreviewToggleState", () => {
+  it("defaults the camera preview to hidden", () => {
+    expect(defaultCameraPreviewVisible).toBe(false);
+    expect(getCameraPreviewToggleState(defaultCameraPreviewVisible)).toEqual({
+      ariaChecked: "false",
+      buttonClassName: "preview-toggle is-off",
+      label: "Preview off",
+      previewHidden: true,
+    });
+  });
+
   it("marks the camera preview as visible when the switch is on", () => {
     expect(getCameraPreviewToggleState(true)).toEqual({
       ariaChecked: "true",

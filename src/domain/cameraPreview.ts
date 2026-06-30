@@ -5,6 +5,8 @@ export interface CameraPreviewToggleState {
   previewHidden: boolean;
 }
 
+export const defaultCameraPreviewVisible = false;
+
 export const getCameraPreviewToggleState = (isVisible: boolean): CameraPreviewToggleState => ({
   ariaChecked: isVisible ? "true" : "false",
   buttonClassName: `preview-toggle${isVisible ? "" : " is-off"}`,
