@@ -4,7 +4,7 @@ import { shouldHandlePointerFallback, shouldTrackPointerFallback } from "./dom/p
 import { defaultCameraPreviewVisible, getCameraPreviewToggleState } from "./domain/cameraPreview";
 import { mapLandmarkToViewport, pointInRect } from "./domain/geometry";
 import { calculateFingerExtensionRatio, calculatePinchRatio, nextFistState, nextPinchState } from "./domain/gesture";
-import { cameraInputOverscanRatio, viewportZoomRange, zoomDeadband } from "./domain/interactionSettings";
+import { getCameraInputOverscanRatio, viewportZoomRange, zoomDeadband } from "./domain/interactionSettings";
 import { defaultSmoothingOptions, drawingSmoothingOptions, smoothPointer } from "./domain/pointerSmoothing";
 import { releaseTool, selectTouchedTool, startSelectedTool } from "./domain/toolSelection";
 import { advanceActiveTool, type ActiveTool, type ToolStrokeSegment } from "./domain/tools";
@@ -558,10 +558,12 @@ function getCanvasSize(): Size {
 }
 
 function mapHandPointerToViewport(landmarks: NormalizedLandmark[]): Point {
+  const viewportSize = { width: window.innerWidth, height: window.innerHeight };
+
   return mapLandmarkToViewport(
     landmarks[8],
-    { width: window.innerWidth, height: window.innerHeight },
-    { mirrorX: true, overscanRatio: cameraInputOverscanRatio },
+    viewportSize,
+    { mirrorX: true, overscanRatio: getCameraInputOverscanRatio(viewportSize) },
   );
 }
 
