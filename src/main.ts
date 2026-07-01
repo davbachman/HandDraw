@@ -1,6 +1,7 @@
 import "./styles.css";
 import { HandLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { shouldHandlePointerFallback, shouldTrackPointerFallback } from "./dom/pointerFallback";
+import { defaultCameraPreviewVisible, getCameraPreviewToggleState } from "./domain/cameraPreview";
 import { mapLandmarkToViewport, pointInRect } from "./domain/geometry";
 import { calculateFingerExtensionRatio, calculatePinchRatio, nextFistState, nextPinchState } from "./domain/gesture";
 import { cameraInputOverscanRatio, viewportZoomRange, zoomDeadband } from "./domain/interactionSettings";
@@ -21,7 +22,10 @@ if (!appRoot) {
 const app = appRoot;
 
 const paletteItems: Array<{ kind: ToolKind; label: string }> = [
-  { kind: "black-pen", label: "Black pen" },
+  { kind: "red-pencil", label: "Red" },
+  { kind: "green-pencil", label: "Green" },
+  { kind: "blue-pencil", label: "Blue" },
+  { kind: "black-pencil", label: "Black" },
   { kind: "eraser", label: "Eraser" },
 ];
 
@@ -39,6 +43,7 @@ let animationFrame = 0;
 let lostTrackingAt: number | null = null;
 let statusMessage = "Use the mouse fallback now, or start the camera when ready. Closed fist over the canvas pans.";
 let cameraStatus: "idle" | "loading" | "active" | "error" = "idle";
+let cameraPreviewVisible = defaultCameraPreviewVisible;
 let lastPinchRatio: number | null = null;
 let lastFingerExtensionRatio: number | null = null;
 let hasCanvasMarks = false;
@@ -56,7 +61,7 @@ app.innerHTML = `
     <aside class="sidebar">
       <div class="brand">
         <h1 class="brand__title">Hand Draw</h1>
-        <span class="brand__meta">Pinch the black pen or eraser, then pinch the canvas to use it. Close your fist over the canvas to pan.</span>
+        <span class="brand__meta">Pinch a colored pencil or eraser, then pinch the canvas to use it. Close your fist over the canvas to pan.</span>
       </div>
       <div class="palette" aria-label="Tool palette">
         ${paletteItems
@@ -74,10 +79,14 @@ app.innerHTML = `
     <section class="workspace" aria-label="Drawing canvas">
       <div class="canvas" data-canvas>
         <canvas class="drawing-surface" data-drawing-canvas></canvas>
-        <span class="canvas-empty" data-empty-label>Select the pen or eraser, then draw on the canvas.</span>
+        <span class="canvas-empty" data-empty-label>Select a pencil or eraser, then pinch the canvas to draw or erase.</span>
       </div>
     </section>
-    <footer class="footer" aria-label="Drawing controls" data-footer>
+    <footer class="footer footer--preview-hidden" aria-label="Camera diagnostics" data-footer>
+      <div class="camera-preview" data-camera-preview hidden>
+        <video data-video playsinline muted></video>
+        <canvas data-debug-canvas></canvas>
+      </div>
       <div class="status">
         <div class="status-line">
           <span class="pill" data-camera-pill>Camera idle</span>
@@ -87,14 +96,16 @@ app.innerHTML = `
         <div class="message" data-message>${statusMessage}</div>
       </div>
       <div class="controls">
+        <button class="preview-toggle is-off" type="button" role="switch" aria-checked="false" data-preview-toggle data-pointer-fallback="ignore">
+          <span data-preview-toggle-label>Preview off</span>
+          <span class="preview-toggle__track" aria-hidden="true">
+            <span class="preview-toggle__thumb"></span>
+          </span>
+        </button>
         <button class="camera-button" type="button" data-camera-button data-pointer-fallback="ignore">Start Camera</button>
         <p class="hint">Mouse fallback: click a tool, then press-drag on the canvas.</p>
       </div>
     </footer>
-    <div class="camera-runtime" aria-hidden="true">
-      <video data-video playsinline muted></video>
-      <canvas data-debug-canvas></canvas>
-    </div>
     <div class="tool-preview" data-tool-preview></div>
     <div class="cursor is-untracked" data-cursor></div>
   </main>
@@ -110,6 +121,8 @@ const requiredElement = <ElementType extends Element>(selector: string): Element
 };
 
 const root = requiredElement<HTMLElement>(".app");
+const footer = requiredElement<HTMLElement>("[data-footer]");
+const cameraPreview = requiredElement<HTMLElement>("[data-camera-preview]");
 const video = requiredElement<HTMLVideoElement>("[data-video]");
 const debugCanvas = requiredElement<HTMLCanvasElement>("[data-debug-canvas]");
 const canvas = requiredElement<HTMLElement>("[data-canvas]");
@@ -120,11 +133,18 @@ const cameraButton = requiredElement<HTMLButtonElement>("[data-camera-button]");
 const cameraPill = requiredElement<HTMLElement>("[data-camera-pill]");
 const trackingPill = requiredElement<HTMLElement>("[data-tracking-pill]");
 const toolPill = requiredElement<HTMLElement>("[data-tool-pill]");
+const previewToggle = requiredElement<HTMLButtonElement>("[data-preview-toggle]");
+const previewToggleLabel = requiredElement<HTMLElement>("[data-preview-toggle-label]");
 const message = requiredElement<HTMLElement>("[data-message]");
 const emptyLabel = requiredElement<HTMLElement>("[data-empty-label]");
 
 cameraButton.addEventListener("click", () => {
   void startCamera();
+});
+
+previewToggle.addEventListener("click", () => {
+  cameraPreviewVisible = !cameraPreviewVisible;
+  renderCameraPreviewToggle();
 });
 
 root.addEventListener("pointermove", (event) => {
@@ -197,7 +217,7 @@ async function startCamera(): Promise<void> {
     await video.play();
 
     cameraStatus = "active";
-    statusMessage = "Camera active. Pinch the pen or eraser, then pinch the canvas to use it.";
+    statusMessage = "Camera active. Pinch a colored pencil or eraser, then pinch the canvas to use it.";
     cameraButton.textContent = "Camera Active";
     renderStatus();
     animationFrame = requestAnimationFrame(processVideoFrame);
@@ -376,12 +396,12 @@ function handleHoldStart(): void {
   }
 
   if (!pointInRect(point, getCanvasRect())) {
-    statusMessage = selectedTool ? `${toolLabel(selectedTool)} selected. Pinch inside the canvas to use it.` : "Select the pen or eraser first.";
+    statusMessage = selectedTool ? `${toolLabel(selectedTool)} selected. Pinch inside the canvas to use it.` : "Pinch a pencil or eraser first.";
     return;
   }
 
   if (!selectedTool) {
-    statusMessage = "Select the pen or eraser first.";
+    statusMessage = "Pinch a pencil or eraser first.";
     return;
   }
 
@@ -400,7 +420,7 @@ function selectToolUnderPointer(): boolean {
   const state = selectTouchedTool({ selectedTool, activeTool }, paletteTool);
   selectedTool = state.selectedTool;
   activeTool = state.activeTool;
-  statusMessage = `${toolLabel(paletteTool)} selected. Pinch the canvas to ${isInkTool(paletteTool) ? "draw" : "erase"}.`;
+  statusMessage = `${toolLabel(paletteTool)} selected. Pinch the canvas to ${isPencilTool(paletteTool) ? "draw" : "erase"}.`;
   return true;
 }
 
@@ -420,7 +440,7 @@ function drawWithActiveTool(): void {
   drawSegment(result.segment);
   renderWorldViewport();
   hasCanvasMarks = true;
-  statusMessage = isInkTool(result.segment.kind) ? `Drawing with ${toolLabel(result.segment.kind)}.` : "Erasing pixels.";
+  statusMessage = isPencilTool(result.segment.kind) ? `Drawing with ${toolLabel(result.segment.kind)}.` : "Erasing pixels.";
 }
 
 function releaseActiveTool(nextMessage?: string): void {
@@ -522,7 +542,7 @@ function getPaletteToolAt(point: Point): ToolKind | null {
   const items = [...app.querySelectorAll<HTMLElement>("[data-tool]")];
   const hit = items.find((item) => pointInRect(point, domRectToRect(item.getBoundingClientRect())));
   const value = hit?.dataset.tool;
-  return value === "black-pen" || value === "eraser" ? value : null;
+  return value === "red-pencil" || value === "green-pencil" || value === "blue-pencil" || value === "black-pencil" || value === "eraser" ? value : null;
 }
 
 function getCanvasRect(): Rect {
@@ -650,6 +670,7 @@ function render(): void {
   renderToolPreview();
   renderCursor();
   renderStatus();
+  renderCameraPreviewToggle();
   emptyLabel.style.display = hasCanvasMarks ? "none" : "block";
 }
 
@@ -712,15 +733,36 @@ function renderStatus(): void {
   message.textContent = statusMessage;
 }
 
+function renderCameraPreviewToggle(): void {
+  const state = getCameraPreviewToggleState(cameraPreviewVisible);
+  cameraPreview.hidden = state.previewHidden;
+  footer.classList.toggle("footer--preview-hidden", state.previewHidden);
+  previewToggle.className = state.buttonClassName;
+  previewToggle.setAttribute("aria-checked", state.ariaChecked);
+  previewToggleLabel.textContent = state.label;
+}
+
 function toolLabel(kind: ToolKind): string {
-  if (kind === "black-pen") {
-    return "Black pen";
+  if (kind === "red-pencil") {
+    return "Red pencil";
+  }
+
+  if (kind === "green-pencil") {
+    return "Green pencil";
+  }
+
+  if (kind === "blue-pencil") {
+    return "Blue pencil";
+  }
+
+  if (kind === "black-pencil") {
+    return "Black pencil";
   }
 
   return "Eraser";
 }
 
-function isInkTool(kind: ToolKind): boolean {
+function isPencilTool(kind: ToolKind): boolean {
   return kind !== "eraser";
 }
 
@@ -750,14 +792,8 @@ function drawDebugLandmarks(hands: NormalizedLandmark[][]): void {
     return;
   }
 
-  const clientWidth = debugCanvas.clientWidth;
-  const clientHeight = debugCanvas.clientHeight;
-  if (clientWidth === 0 || clientHeight === 0) {
-    return;
-  }
-
-  const width = clientWidth * window.devicePixelRatio;
-  const height = clientHeight * window.devicePixelRatio;
+  const width = debugCanvas.clientWidth * window.devicePixelRatio;
+  const height = debugCanvas.clientHeight * window.devicePixelRatio;
   if (debugCanvas.width !== width || debugCanvas.height !== height) {
     debugCanvas.width = width;
     debugCanvas.height = height;
@@ -779,14 +815,14 @@ function drawDebugLandmarks(hands: NormalizedLandmark[][]): void {
       const from = landmarks[connection.start];
       const to = landmarks[connection.end];
       context.beginPath();
-      context.moveTo(from.x * clientWidth, from.y * clientHeight);
-      context.lineTo(to.x * clientWidth, to.y * clientHeight);
+      context.moveTo(from.x * debugCanvas.clientWidth, from.y * debugCanvas.clientHeight);
+      context.lineTo(to.x * debugCanvas.clientWidth, to.y * debugCanvas.clientHeight);
       context.stroke();
     }
 
     for (const landmark of landmarks) {
       context.beginPath();
-      context.arc(landmark.x * clientWidth, landmark.y * clientHeight, 2.6, 0, Math.PI * 2);
+      context.arc(landmark.x * debugCanvas.clientWidth, landmark.y * debugCanvas.clientHeight, 2.6, 0, Math.PI * 2);
       context.fill();
     }
   }

@@ -29,6 +29,13 @@ export const createActiveTool = (kind: ToolKind): ActiveTool => ({
   lastCanvasPoint: null,
 });
 
+const pencilColors: Record<Exclude<ToolKind, "eraser">, string> = {
+  "red-pencil": "#ef4444",
+  "green-pencil": "#22c55e",
+  "blue-pencil": "#2563eb",
+  "black-pencil": "#101827",
+};
+
 export const getToolBrush = (kind: ToolKind): ToolBrush => {
   if (kind === "eraser") {
     return {
@@ -38,15 +45,11 @@ export const getToolBrush = (kind: ToolKind): ToolBrush => {
     };
   }
 
-  if (kind === "black-pen") {
-    return {
-      compositeOperation: "source-over",
-      lineWidth: 6,
-      strokeStyle: "#101827",
-    };
-  }
-
-  throw new Error(`Unsupported tool: ${kind}`);
+  return {
+    compositeOperation: "source-over",
+    lineWidth: 6,
+    strokeStyle: pencilColors[kind],
+  };
 };
 
 export const advanceActiveTool = (
