@@ -3,8 +3,8 @@ import { chooseTool, releaseTool, selectTouchedTool, startSelectedTool } from ".
 
 describe("tool selection", () => {
   it("selects a sidebar tool without starting a drawing session", () => {
-    expect(chooseTool({ selectedTool: null, activeTool: null }, "red-pencil")).toEqual({
-      selectedTool: "red-pencil",
+    expect(chooseTool({ selectedTool: null, activeTool: null }, "black-pen")).toEqual({
+      selectedTool: "black-pen",
       activeTool: null,
     });
   });
@@ -17,10 +17,10 @@ describe("tool selection", () => {
   });
 
   it("releases only the active tool and keeps the sidebar tool highlighted", () => {
-    const drawing = startSelectedTool({ selectedTool: "green-pencil", activeTool: null });
+    const drawing = startSelectedTool({ selectedTool: "black-pen", activeTool: null });
 
     expect(releaseTool(drawing)).toEqual({
-      selectedTool: "green-pencil",
+      selectedTool: "black-pen",
       activeTool: null,
     });
   });
@@ -33,14 +33,14 @@ describe("tool selection", () => {
   });
 
   it("selects a touched sidebar tool without requiring a pinch", () => {
-    expect(selectTouchedTool({ selectedTool: null, activeTool: null }, "blue-pencil")).toEqual({
-      selectedTool: "blue-pencil",
+    expect(selectTouchedTool({ selectedTool: null, activeTool: null }, "black-pen")).toEqual({
+      selectedTool: "black-pen",
       activeTool: null,
     });
   });
 
   it("keeps the current tool state when the pointer is not touching a tool", () => {
-    const drawing = startSelectedTool({ selectedTool: "red-pencil", activeTool: null });
+    const drawing = startSelectedTool({ selectedTool: "black-pen", activeTool: null });
 
     expect(selectTouchedTool(drawing, null)).toBe(drawing);
   });

@@ -1,4 +1,4 @@
-export type ToolKind = "red-pencil" | "green-pencil" | "blue-pencil" | "black-pencil" | "eraser";
+export type ToolKind = "black-pen" | "eraser";
 
 export interface PointerState {
   x: number;
